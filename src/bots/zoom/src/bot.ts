@@ -212,71 +212,95 @@ export class ZoomBot extends Bot {
     const frame = await iframe?.contentFrame();
 
     // Constantly check if the meeting has ended every second
-    const checkMeetingEnd = async () => {
+    const checkMeetingEnd = () => new Promise<void>((resolve, reject) => {
+      const poll = async () => {
+        try {
+          // Wait for the "Ok" button to appear which indicates the meeting is over
+          const okButton = await frame?.waitForSelector(
+              "button.zm-btn.zm-btn-legacy.zm-btn--primary.zm-btn__outline--blue",
+              { timeout: 1000 },
+          );
 
-      try {
-        // Wait for the "Ok" button to appear which indicates the meeting is over
-        const okButton = await frame?.waitForSelector(
-            "button.zm-btn.zm-btn-legacy.zm-btn--primary.zm-btn__outline--blue",
-            { timeout: 1000 },
-        );
+          if (okButton) {
+            console.log("Meeting ended");
 
-        if (okButton) {
-          console.log("Meeting ended");
+            // Click the button to leave the meeting
+            await okButton.click();
 
-          // Click the button to leave the meeting
-          await okButton.click();
+            // Stop Recording
+            this.stopRecording();
 
-          // Stop Recording
-          this.stopRecording();
+            // End Life -- Close file, browser, and websocket server
+            this.endLife();
 
-          // End Life -- Close file, browser, and websocket server
-          this.endLife();
+            resolve();
+            return;
+          }
 
-          return;
+          // Schedule next iteration
+          setTimeout(poll, 1000);
+        } catch (err) {
+          // If it was a timeout
+          // @ts-ignore
+          if (err?.name === "TimeoutError") {
+            // The button wasn’t there in the last second. Running next iteration
+            setTimeout(poll, 1000);
+          } else {
+            // If it was some other error we throw it
+            reject(err);
+          }
         }
-      } catch (err) {
-        // If it was a timeout
-        // @ts-ignore
-        if (err?.name === "TimeoutError") {
-          // The button wasn’t there in the last second. Running next iteration
-          setTimeout(checkMeetingEnd, 1000);
-          return;
-        }
-        // If it was some other error we throw it
-        throw err;
-      }
-    };
+      };
+
+      poll();
+    });
 
     // Constantly check if Meeting is still running, every minute
-    const checkIfMeetingRunning = async () => {
-      try {
-        // Checking if Leave buttons is present which indicates the meeting is still running
-        const leaveButtonEl = await frame?.waitForSelector(
-            leaveButton,
-            { timeout: 700 },
-        );
+    const checkIfMeetingRunning = () => new Promise<void>((resolve, reject) => {
+      const poll = async () => {
+        try {
+          // Checking if Leave buttons is present which indicates the meeting is still running
+          const leaveButtonEl = await frame?.waitForSelector(
+              leaveButton,
+              { timeout: 700 },
+          );
 
-        if (leaveButtonEl) {
-          setTimeout(checkIfMeetingRunning, 60000);
-        }
-      } catch (err) {
-        // Only treat a timeout as “meeting ended”; rethrow anything else.
-        // @ts-ignore
-        if (err?.name === "TimeoutError") {
-          console.error("Meeting ended unexpectedly");
-          this.stopRecording();
-          this.endLife();
-        } else {
-          throw err;
-        }
-      }
-    };
+          if (leaveButtonEl) {
+            console.warn('Meeting in progress');
+            setTimeout(poll, 60000);
+          } else {
+            // Leave button not found within timeout window
+            console.error("Meeting ended unexpectedly");
 
-    // Start the meeting end check
-    await checkMeetingEnd();
-    // Start the meeting running check
-    await checkIfMeetingRunning();
+            this.stopRecording();
+            this.endLife();
+
+            resolve();
+          }
+        } catch (err) {
+          // Only treat a timeout as “meeting ended”; rethrow anything else.
+          // @ts-ignore
+          if (err?.name === "TimeoutError") {
+            console.error("Meeting ended unexpectedly");
+
+            this.stopRecording();
+            this.endLife();
+
+            resolve();
+          } else {
+            reject(err);
+          }
+        }
+      };
+
+      poll();
+    });
+
+    // Start both meeting end checks in parallel and return once either of them finishes
+    await Promise.race([
+      checkMeetingEnd(),
+      checkIfMeetingRunning()
+    ]);
   }
 
   // Get the path to the recording file
