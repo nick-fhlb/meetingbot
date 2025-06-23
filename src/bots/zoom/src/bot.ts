@@ -159,6 +159,10 @@ export class ZoomBot extends Bot {
 
       // Wait for the leave button to appear and be properly labeled before proceeding
       console.log("Leave button found and labeled, ready to start recording");
+    } else {
+      console.error('frame is not created!');
+      console.error(frame);
+      console.error(iframe);
     }
   }
 
