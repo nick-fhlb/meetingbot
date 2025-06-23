@@ -170,7 +170,7 @@ export class ZoomBot extends Bot {
       console.log('Buttons found in Zoom iframe:', buttonIds);
 
       // Waits for the mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
@@ -180,7 +180,6 @@ export class ZoomBot extends Bot {
       // Waits for the stop video button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
       await frame.waitForSelector(stopVideoButton);
-      await new Promise((resolve) => setTimeout(resolve, 500));
       await frame.click(stopVideoButton);
       console.log("Stopped video");
       await this.screenshot('screenshot-video.png');
