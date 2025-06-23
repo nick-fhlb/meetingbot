@@ -167,7 +167,7 @@ export class ZoomBot extends Bot {
       // console.log('Buttons found in Zoom iframe:', buttonIds);
 
       // Waits for the mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 6000));
 
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
