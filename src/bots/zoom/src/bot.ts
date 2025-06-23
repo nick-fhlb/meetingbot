@@ -169,16 +169,16 @@ export class ZoomBot extends Bot {
       // Waits for the mute button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      await frame.waitForSelector(muteButton);
-      console.warn('mute selector');
-      await frame.click(muteButton);
-      console.log("Muted");
-
-      // Waits for the stop video button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 1500)); // TODO: remove this line later
-      await frame.waitForSelector(stopVideoButton);
-      await frame.click(stopVideoButton);
-      console.log("Stopped video");
+      // await frame.waitForSelector(muteButton);
+      // console.warn('mute selector');
+      // await frame.click(muteButton);
+      // console.log("Muted");
+      //
+      // // Waits for the stop video button to be clickable and clicks it
+      // await new Promise((resolve) => setTimeout(resolve, 1500)); // TODO: remove this line later
+      // await frame.waitForSelector(stopVideoButton);
+      // await frame.click(stopVideoButton);
+      // console.log("Stopped video");
 
       // Waits for the input field and types the name from the config
       await frame.waitForSelector("#input-for-name");
