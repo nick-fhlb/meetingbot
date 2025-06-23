@@ -153,6 +153,12 @@ export class ZoomBot extends Bot {
         console.warn('TOS modal not found');
       }
 
+      const buttonIds = await frame.$$eval('button', buttons =>
+          buttons.map(btn => btn.id || '(no id)')
+      );
+
+      console.log('Buttons found in Zoom iframe:', buttonIds);
+
       await frame.waitForSelector(muteButton);
       console.warn('mute selector');
       await frame.click(muteButton);
