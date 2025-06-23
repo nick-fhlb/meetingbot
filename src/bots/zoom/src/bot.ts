@@ -12,6 +12,7 @@ const muteButton = 'button[aria-label="Mute"]';
 const stopVideoButton = 'button[aria-label="Stop Video"]';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
+const acceptCookiesButton = '#onetrust-accept-btn-handler';
 import { Browser } from "puppeteer";
 import { Transform } from "stream";
 
@@ -126,8 +127,19 @@ export class ZoomBot extends Bot {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       console.warn('promise 1');
       // Waits for mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // TODO: remove this line later
+      await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
       console.warn('promise 2');
+
+      // Checking if Cookies modal popped up
+      try {
+        await frame.waitForSelector(acceptCookiesButton, {
+          timeout: 700,
+        });
+        frame.click(acceptCookiesButton);
+        console.log('Cookies Accepted');
+      } catch (error) {
+        console.warn('Cookies modal not found');
+      }
       await frame.waitForSelector(muteButton);
       console.warn('mute selector');
       await frame.click(muteButton);
