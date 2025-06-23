@@ -147,7 +147,8 @@ export class ZoomBot extends Bot {
         await frame.waitForSelector(acceptTermsButton, {
           timeout: 700,
         });
-        frame.click(acceptTermsButton);
+        console.log('TOS Found');
+        await frame.click(acceptTermsButton);
         console.log('TOS Accepted');
       } catch (error) {
         console.warn('TOS modal not found');
