@@ -142,6 +142,7 @@ export class ZoomBot extends Bot {
         console.warn('Cookies modal not found');
       }
 
+      // Waits for the TOS popup, then finds the button and clicks it
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Checking if TOS modal popped up
@@ -165,13 +166,16 @@ export class ZoomBot extends Bot {
 
       console.log('Buttons found in Zoom iframe:', buttonIds);
 
+      // Waits for the mute button to be clickable and clicks it
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       await frame.waitForSelector(muteButton);
       console.warn('mute selector');
       await frame.click(muteButton);
       console.log("Muted");
 
       // Waits for the stop video button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // TODO: remove this line later
       await frame.waitForSelector(stopVideoButton);
       await frame.click(stopVideoButton);
       console.log("Stopped video");
