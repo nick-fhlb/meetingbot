@@ -13,7 +13,7 @@ const stopVideoButton = 'button[aria-label="Stop Video"]';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
 const acceptCookiesButton = '#onetrust-accept-btn-handler';
-const acceptTermsButton = 'button:has-text("I Agree")';
+const acceptTermsButton = '#onetrust-accept-btn-handle';
 import { Browser } from "puppeteer";
 import { Transform } from "stream";
 
