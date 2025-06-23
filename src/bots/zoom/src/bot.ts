@@ -13,6 +13,7 @@ const stopVideoButton = 'button[aria-label="Stop Video"]';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
 const acceptCookiesButton = '#onetrust-accept-btn-handler';
+const acceptTermsButton = 'button:has-text("I Agree")';
 import { Browser } from "puppeteer";
 import { Transform } from "stream";
 
@@ -140,6 +141,18 @@ export class ZoomBot extends Bot {
       } catch (error) {
         console.warn('Cookies modal not found');
       }
+
+      // Checking if TOS modal popped up
+      try {
+        await frame.waitForSelector(acceptTermsButton, {
+          timeout: 700,
+        });
+        frame.click(acceptTermsButton);
+        console.log('TOS Accepted');
+      } catch (error) {
+        console.warn('TOS modal not found');
+      }
+
       await frame.waitForSelector(muteButton);
       console.warn('mute selector');
       await frame.click(muteButton);
