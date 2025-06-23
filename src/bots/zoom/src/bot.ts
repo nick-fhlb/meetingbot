@@ -121,12 +121,15 @@ export class ZoomBot extends Bot {
     console.log("Opened iFrame");
 
     if (frame) {
+      console.warn('into frame');
       // Wait for things to load (can be removed later in place of a check for a button to be clickable)
       await new Promise((resolve) => setTimeout(resolve, 1500));
-
+      console.warn('promise 1');
       // Waits for mute button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
+      console.warn('promise 2');
       await frame.waitForSelector(muteButton);
+      console.warn('mute selector');
       await frame.click(muteButton);
       console.log("Muted");
 
