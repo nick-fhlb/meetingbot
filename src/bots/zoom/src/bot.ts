@@ -7,11 +7,17 @@ import path from "path";
 
 
 
+// const muteButton = 'button[aria-label="Mute"]';
+// const stopVideoButton = 'button[aria-label="Stop Video"]';
 // Constant Selectors
-const muteButton = 'button[aria-label="Mute"]';
-const stopVideoButton = 'button[aria-label="Stop Video"]';
+
+// Replaced buttons selector with IDs to avoid possible language mismatch
+const muteButton = '#preview-audio-control-button';
+const stopVideoButton = '#preview-video-control-button';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
+const acceptCookiesButton = '#onetrust-accept-btn-handler';
+const acceptTermsButton = '#wc_agree1';
 import { Browser } from "puppeteer";
 import { Transform } from "stream";
 
@@ -126,12 +132,39 @@ export class ZoomBot extends Bot {
 
       // Waits for mute button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
+
+      // Checking if Cookies modal popped up
+      try {
+        await frame.waitForSelector(acceptCookiesButton, {
+          timeout: 700,
+        });
+        frame.click(acceptCookiesButton);
+        console.log('Cookies Accepted');
+      } catch (error) {
+        // It's OK
+        console.warn('Cookies modal not found');
+      }
+
+      // Checking if TOS modal popped up
+      try {
+        await frame.waitForSelector(acceptTermsButton, {
+          timeout: 700,
+        });
+        await frame.click(acceptTermsButton);
+        console.log('TOS Accepted');
+      } catch (error) {
+        // It's OK
+        console.warn('TOS modal not found');
+      }
+
+      // Waits for the mute and video button to be clickable and clicks them.
+      // The timeout is big to make sure buttons are initialized. With smaller one click doesn't work randomly and bot joins the meeting with sound and/or video
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
       console.log("Muted");
 
-      // Waits for the stop video button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
       await frame.waitForSelector(stopVideoButton);
       await frame.click(stopVideoButton);
       console.log("Stopped video");
@@ -159,6 +192,10 @@ export class ZoomBot extends Bot {
 
       // Wait for the leave button to appear and be properly labeled before proceeding
       console.log("Leave button found and labeled, ready to start recording");
+    } else {
+      console.error('frame is not created!');
+      console.error(frame);
+      console.error(iframe);
     }
   }
 
