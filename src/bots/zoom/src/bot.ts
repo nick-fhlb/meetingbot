@@ -154,7 +154,10 @@ export class ZoomBot extends Bot {
       }
 
       const buttonIds = await frame.$$eval('button', buttons =>
-          buttons.map(btn => btn.id || '(no id)')
+          buttons.map(b => ({
+            text: b.innerText.trim(),        // what the user sees (handles nested <span>s)
+            id:   b.id || '(no id)'          // fallback label if the id is empty
+          }))
       );
 
       console.log('Buttons found in Zoom iframe:', buttonIds);
