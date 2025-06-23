@@ -126,7 +126,7 @@ export class ZoomBot extends Bot {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       console.warn('promise 1');
       // Waits for mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // TODO: remove this line later
       console.warn('promise 2');
       await frame.waitForSelector(muteButton);
       console.warn('mute selector');
