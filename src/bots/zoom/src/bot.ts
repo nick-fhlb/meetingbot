@@ -142,6 +142,8 @@ export class ZoomBot extends Bot {
         console.warn('Cookies modal not found');
       }
 
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       // Checking if TOS modal popped up
       try {
         await frame.waitForSelector(acceptTermsButton, {
