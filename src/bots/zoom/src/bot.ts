@@ -127,13 +127,10 @@ export class ZoomBot extends Bot {
     console.log("Opened iFrame");
 
     if (frame) {
-      console.warn('into frame');
       // Wait for things to load (can be removed later in place of a check for a button to be clickable)
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.warn('promise 1');
       // Waits for mute button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
-      console.warn('promise 2');
 
       // Checking if Cookies modal popped up
       try {
@@ -160,17 +157,17 @@ export class ZoomBot extends Bot {
         console.warn('TOS modal not found');
       }
 
-      const buttonIds = await frame.$$eval('button', buttons =>
-          buttons.map(b => ({
-            text: b.innerText.trim(),        // what the user sees (handles nested <span>s)
-            id:   b.id || '(no id)'          // fallback label if the id is empty
-          }))
-      );
-
-      console.log('Buttons found in Zoom iframe:', buttonIds);
+      // const buttonIds = await frame.$$eval('button', buttons =>
+      //     buttons.map(b => ({
+      //       text: b.innerText.trim(),        // what the user sees (handles nested <span>s)
+      //       id:   b.id || '(no id)'          // fallback label if the id is empty
+      //     }))
+      // );
+      //
+      // console.log('Buttons found in Zoom iframe:', buttonIds);
 
       // Waits for the mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
