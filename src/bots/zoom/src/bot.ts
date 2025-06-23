@@ -8,8 +8,10 @@ import path from "path";
 
 
 // Constant Selectors
-const muteButton = 'button[aria-label="Mute"]';
-const stopVideoButton = 'button[aria-label="Stop Video"]';
+// const muteButton = 'button[aria-label="Mute"]';
+const muteButton = '#preview-audio-control-button';
+// const stopVideoButton = 'button[aria-label="Stop Video"]';
+const stopVideoButton = '#preview-video-control-button"]';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
 const acceptCookiesButton = '#onetrust-accept-btn-handler';
@@ -151,7 +153,6 @@ export class ZoomBot extends Bot {
         await frame.waitForSelector(acceptTermsButton, {
           timeout: 700,
         });
-        console.log('TOS Found');
         await frame.click(acceptTermsButton);
         console.log('TOS Accepted');
       } catch (error) {
@@ -168,15 +169,14 @@ export class ZoomBot extends Bot {
       console.log('Buttons found in Zoom iframe:', buttonIds);
 
       // Waits for the mute button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 700));
 
       await frame.waitForSelector(muteButton);
-      await new Promise((resolve) => setTimeout(resolve, 500));
       await frame.click(muteButton);
       console.log("Muted");
 
       // Waits for the stop video button to be clickable and clicks it
-      await new Promise((resolve) => setTimeout(resolve, 1500)); // TODO: remove this line later
+      await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
       await frame.waitForSelector(stopVideoButton);
       await new Promise((resolve) => setTimeout(resolve, 500));
       await frame.click(stopVideoButton);
