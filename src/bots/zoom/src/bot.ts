@@ -11,7 +11,7 @@ import path from "path";
 // const muteButton = 'button[aria-label="Mute"]';
 const muteButton = '#preview-audio-control-button';
 // const stopVideoButton = 'button[aria-label="Stop Video"]';
-const stopVideoButton = '#preview-video-control-button"]';
+const stopVideoButton = '#preview-video-control-button';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
 const acceptCookiesButton = '#onetrust-accept-btn-handler';
@@ -72,7 +72,8 @@ export class ZoomBot extends Bot {
 
     // Launch a browser and open the meeting
     this.browser = await launch({
-      executablePath: puppeteer.executablePath(),
+      // executablePath: puppeteer.executablePath(),
+      executablePath: '/opt/homebrew/bin/chromium',
       headless: "new",
       args: [
         "--no-sandbox",
@@ -174,6 +175,7 @@ export class ZoomBot extends Bot {
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
       console.log("Muted");
+      await this.screenshot('screenshot-muted.png');
 
       // Waits for the stop video button to be clickable and clicks it
       await new Promise((resolve) => setTimeout(resolve, 700)); // TODO: remove this line later
@@ -181,6 +183,7 @@ export class ZoomBot extends Bot {
       await new Promise((resolve) => setTimeout(resolve, 500));
       await frame.click(stopVideoButton);
       console.log("Stopped video");
+      await this.screenshot('screenshot-video.png');
 
       // Waits for the input field and types the name from the config
       await frame.waitForSelector("#input-for-name");
