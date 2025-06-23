@@ -72,8 +72,8 @@ export class ZoomBot extends Bot {
 
     // Launch a browser and open the meeting
     this.browser = await launch({
-      // executablePath: puppeteer.executablePath(),
-      executablePath: '/opt/homebrew/bin/chromium',
+      executablePath: puppeteer.executablePath(),
+      // executablePath: '/opt/homebrew/bin/chromium',
       headless: "new",
       args: [
         "--no-sandbox",
