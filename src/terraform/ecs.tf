@@ -320,6 +320,10 @@ resource "aws_ecs_task_definition" "meet_bot" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "NODE_ENV"
+          value = "production"
         }
       ]
       readonlyRootFilesystem = false
@@ -362,6 +366,10 @@ resource "aws_ecs_task_definition" "zoom_bot" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "NODE_ENV"
+          value = "production"
         }
       ]
       readonlyRootFilesystem = false
@@ -404,6 +412,10 @@ resource "aws_ecs_task_definition" "teams_bot" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "NODE_ENV"
+          value = "production"
         }
       ]
       readonlyRootFilesystem = false
