@@ -1,5 +1,5 @@
 # Use the official Playwright Docker image as the base stage
-FROM mcr.microsoft.com/playwright:v1.52.0-jammy AS base
+FROM mcr.microsoft.com/playwright:v1.53.0-jammy AS base
 
 # Install XVFB dependencies
 RUN apt-get update && apt-get install -y \
@@ -39,7 +39,7 @@ RUN mkdir -p /root/ms-playwright && chmod -R 777 /root/ms-playwright
 
 # ======================================================
 # Runtime stage
-FROM mcr.microsoft.com/playwright:v1.52.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright:v1.53.0-jammy AS runtime
 
 # Get meeting platform this file is built for
 ENV DOCKER_MEETING_PLATFORM=meet
