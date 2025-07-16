@@ -1,5 +1,5 @@
 # Use the official Playwright Docker image as the base stage
-FROM mcr.microsoft.com/playwright:v1.53.0-jammy AS base
+FROM mcr.microsoft.com/playwright:v1.52.0-jammy AS base
 
 # Install XVFB dependencies
 RUN apt-get update && apt-get install -y \
@@ -29,17 +29,17 @@ RUN sed -i 's/\r$//' ./meet/entrypoint.sh
 RUN pnpm install --filter "@bots/meet" --filter "bots"
 
 # Install Playwright dependencies
-RUN pnpm dlx playwright@1.51.0 install-deps
+RUN pnpm dlx playwright@1.52.0 install-deps
 
 # Install Playwright browsers
-RUN pnpm dlx playwright@1.51.0 install --with-deps
+RUN pnpm dlx playwright@1.52.0 install --with-deps
 
 # Ensure the Playwright cache directory has the correct permissions
 RUN mkdir -p /root/ms-playwright && chmod -R 777 /root/ms-playwright
 
 # ======================================================
 # Runtime stage
-FROM mcr.microsoft.com/playwright:v1.53.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright:v1.52.0-jammy AS runtime
 
 # Get meeting platform this file is built for
 ENV DOCKER_MEETING_PLATFORM=meet
