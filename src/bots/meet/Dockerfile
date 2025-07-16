@@ -29,10 +29,10 @@ RUN sed -i 's/\r$//' ./meet/entrypoint.sh
 RUN pnpm install --filter "@bots/meet" --filter "bots"
 
 # Install Playwright dependencies
-RUN pnpm dlx playwright@1.51.0 install-deps
+RUN pnpm dlx playwright@1.52.0 install-deps
 
 # Install Playwright browsers
-RUN pnpm dlx playwright@1.51.0 install --with-deps
+RUN pnpm dlx playwright@1.52.0 install --with-deps
 
 # Ensure the Playwright cache directory has the correct permissions
 RUN mkdir -p /root/ms-playwright && chmod -R 777 /root/ms-playwright
