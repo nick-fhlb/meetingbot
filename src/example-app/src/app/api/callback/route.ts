@@ -13,46 +13,59 @@ export async function GET() {
 }
 
 // Validate Bot is finished and exists
-const validateBot = async (botId: number) => {
-  // Validate
-  if (!BOT_API_KEY) return NextResponse.json({ error: 'Missing required environment variable: BOT_API_KEY' }, { status: 500 });
-  if (!MEETINGBOT_END_POINT) return NextResponse.json({ error: 'Missing required environment variable: MEETINGBOT_END_POINT' }, { status: 500 });
-
-  // Ensure bot actually exists and is really done
-  const response = await fetch(`${MEETINGBOT_END_POINT}/api/bots/${botId}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': BOT_API_KEY,
+const validateBot = async (botId: number): Promise<boolean> => {
+  try {
+    // Validate environment variables
+    if (!BOT_API_KEY || !MEETINGBOT_END_POINT) {
+      console.error('Missing required environment variables');
+      return false;
     }
-  });
 
-  // Bot Validation Failed
-  if (response.status !== 200) return false;
+    // Ensure bot actually exists and is really done
+    const response = await fetch(`${MEETINGBOT_END_POINT}/api/bots/${botId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': BOT_API_KEY,
+      }
+    });
 
-  //Check if status is done
-  const fetchedBot = await response.json();
-  if (fetchedBot.status !== 'DONE') return false;
+    // Bot Validation Failed
+    if (response.status !== 200) {
+      console.error(`Bot validation failed with status: ${response.status}`);
+      return false;
+    }
 
-  // Bot Validation Passed
-  return true;
+    // Check if status is done
+    const fetchedBot = await response.json();
+    if (fetchedBot.status !== 'DONE') {
+      console.error(`Bot status is ${fetchedBot.status}, expected DONE`);
+      return false;
+    }
+
+    // Bot Validation Passed
+    return true;
+  } catch (error) {
+    console.error('Error validating bot:', error);
+    return false;
+  }
 }
 
 export async function POST(req: Request) {
   try {
-    // Validate
+    // Validate environment variables
     if (!BOT_API_KEY) return NextResponse.json({ error: 'Missing required environment variable: BOT_API_KEY' }, { status: 500 });
     if (!MEETINGBOT_END_POINT) return NextResponse.json({ error: 'Missing required environment variable: MEETINGBOT_END_POINT' }, { status: 500 });
 
     // Get bot id from request body telling it it's done
     const { botId } = await req.json();
-    if (botId === null)
-      return NextResponse.json('Malfored Body - botId is not defined', { status: 400 });
+    if (botId === null || botId === undefined)
+      return NextResponse.json({ error: 'Malformed Body - botId is not defined' }, { status: 400 });
 
-    // We will just validate that the bot is finished.
-    const validationResult = validateBot(botId);
+    // Validate that the bot is finished
+    const validationResult = await validateBot(botId);
     if (!validationResult)
-      return NextResponse.json('Bot Validation Failed', { status: 403 });
+      return NextResponse.json({ error: 'Bot Validation Failed' }, { status: 403 });
 
     // Send request to MeetingBot API to get the signed Recording URL from S3
     const recordingResponse = await fetch(`${MEETINGBOT_END_POINT}/api/bots/${botId}/recording`, {

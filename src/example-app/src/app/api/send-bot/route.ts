@@ -5,6 +5,41 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
+    // Validate required fields in request body
+    const requiredFields = ['userId', 'meetingTitle', 'meetingInfo', 'callbackUrl'];
+    const missingFields = requiredFields.filter(field => !body[field]);
+    
+    if (missingFields.length > 0) {
+      return NextResponse.json({ 
+        error: `Missing required fields: ${missingFields.join(', ')}` 
+      }, { status: 400 });
+    }
+
+    // Validate meetingInfo structure
+    const { meetingInfo } = body;
+    if (!meetingInfo || typeof meetingInfo !== 'object') {
+      return NextResponse.json({ 
+        error: 'meetingInfo must be a valid object' 
+      }, { status: 400 });
+    }
+
+    // Validate meetingInfo has required platform field
+    if (!meetingInfo.platform) {
+      return NextResponse.json({ 
+        error: 'meetingInfo must include platform field' 
+      }, { status: 400 });
+    }
+
+    // Validate callbackUrl format
+    const { callbackUrl } = body;
+    try {
+      new URL(callbackUrl);
+    } catch {
+      return NextResponse.json({ 
+        error: 'callbackUrl must be a valid URL' 
+      }, { status: 400 });
+    }
+
     // Get Key
     const key = process.env.BOT_API_KEY;
     if (!key) throw new Error(`Missing required environment variable: BOT_API_KEY`);
