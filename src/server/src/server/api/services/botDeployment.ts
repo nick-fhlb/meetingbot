@@ -1,17 +1,17 @@
-import { type BotConfig, bots } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
-import { type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import {type BotConfig, bots} from "~/server/db/schema";
+import {eq} from "drizzle-orm";
+import {type PostgresJsDatabase} from "drizzle-orm/postgres-js";
 import type * as schema from "~/server/db/schema";
-import { spawn } from "child_process";
+import {spawn} from "child_process";
 import path from "path";
-import { fileURLToPath } from "url";
+import {fileURLToPath} from "url";
 import {
   ECSClient,
   type ECSClientConfig,
   RunTaskCommand,
   type RunTaskRequest,
 } from "@aws-sdk/client-ecs";
-import { env } from "~/env";
+import {env} from "~/env";
 
 // Get the directory path using import.meta.url
 const __filename = fileURLToPath(import.meta.url);
@@ -29,6 +29,11 @@ if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
 }
 
 const client = new ECSClient(config);
+import dotenv from 'dotenv';
+import {deployImage} from './exoSksUtil';
+
+// Load environment variables from .env file
+dotenv.config();
 
 /**
  * Selects the appropriate bot task definition based on meeting information
@@ -36,7 +41,7 @@ const client = new ECSClient(config);
  * @returns The task definition ARN to use for deployment
  */
 export function selectBotTaskDefinition(
-  meetingInfo: schema.MeetingInfo,
+    meetingInfo: schema.MeetingInfo,
 ): string {
   const platform = meetingInfo.platform;
 
@@ -52,6 +57,23 @@ export function selectBotTaskDefinition(
   }
 }
 
+export function selectBotImage(
+    meetingInfo: schema.MeetingInfo,
+): string {
+  const platform = meetingInfo.platform;
+
+  switch (platform?.toLowerCase()) {
+    case "google":
+      return env.BOT_IMAGE_MEET;
+    case "teams":
+      return env.BOT_IMAGE_TEAMS;
+    case "zoom":
+      return env.BOT_IMAGE_ZOOM;
+    default:
+      throw new Error(`Unsupported platform: ${platform}`);
+  }
+}
+
 export class BotDeploymentError extends Error {
   constructor(message: string) {
     super(message);
@@ -60,9 +82,9 @@ export class BotDeploymentError extends Error {
 }
 
 export async function deployBot({
-  botId,
-  db,
-}: {
+                                  botId,
+                                  db,
+                                }: {
   botId: number;
   db: PostgresJsDatabase<typeof schema>;
 }) {
@@ -74,7 +96,7 @@ export async function deployBot({
   const dev = env.NODE_ENV === "development";
 
   // First, update bot status to deploying
-  await db.update(bots).set({ status: "DEPLOYING" }).where(eq(bots.id, botId));
+  await db.update(bots).set({status: "DEPLOYING"}).where(eq(bots.id, botId));
 
   try {
     // Get the absolute path to the bots directory (parent directory)
@@ -116,6 +138,16 @@ export async function deployBot({
       botProcess.on("error", (error) => {
         console.error(`Bot ${botId} process error:`, error);
       });
+    } else if (env.BOTS_PROVIDER.toLowerCase() === 'exoscale') {
+      await deployImage({
+        name: bot.meetingInfo.platform.concat('-').concat(botId),
+        image: selectBotImage(bot.meetingInfo),
+        env: {
+          ...process.env,
+          BOT_DATA: JSON.stringify(config),
+        },
+        expose: false,
+      });
     } else {
       // todo: i'm not sure if this works as intended
       const input: RunTaskRequest = {
@@ -152,13 +184,13 @@ export async function deployBot({
 
     // Update status to joining call
     const result = await db
-      .update(bots)
-      .set({
-        status: "JOINING_CALL",
-        deploymentError: null,
-      })
-      .where(eq(bots.id, botId))
-      .returning();
+        .update(bots)
+        .set({
+          status: "JOINING_CALL",
+          deploymentError: null,
+        })
+        .where(eq(bots.id, botId))
+        .returning();
 
     if (!result[0]) {
       throw new BotDeploymentError("Bot not found");
@@ -168,20 +200,20 @@ export async function deployBot({
   } catch (error) {
     // Update status to fatal and store error message
     await db
-      .update(bots)
-      .set({
-        status: "FATAL",
-        deploymentError:
-          error instanceof Error ? error.message : "Unknown error",
-      })
-      .where(eq(bots.id, botId));
+        .update(bots)
+        .set({
+          status: "FATAL",
+          deploymentError:
+              error instanceof Error ? error.message : "Unknown error",
+        })
+        .where(eq(bots.id, botId));
 
     throw error;
   }
 }
 
 export async function shouldDeployImmediately(
-  startTime: Date | undefined | null,
+    startTime: Date | undefined | null,
 ): Promise<boolean> {
   if (!startTime) return true;
 

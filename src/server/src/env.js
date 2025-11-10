@@ -73,6 +73,14 @@ export const env = createEnv({
             z.array(z.string()),
           )
         : z.array(z.string()).default([]),
+    EXO_KEY: z.string().default(""),
+    EXO_SECRET: z.string().default(""),
+    EXO_ZONE: z.string().default(""),
+    EXO_CLUSTER_ID: z.string().default(""),
+    BOT_IMAGE_MEET: z.string().default("ghcr.io/meetingbot/bots/meet:main"),
+    BOT_IMAGE_TEAMS: z.string().default("ghcr.io/meetingbot/bots/teams:main"),
+    BOT_IMAGE_ZOOM: z.string().default("ghcr.io/meetingbot/bots/zoom:main"),
+    BOTS_PROVIDER: z.string().default("AWS"),
   },
 
   /**
@@ -105,6 +113,14 @@ export const env = createEnv({
     ECS_CLUSTER_NAME: process.env.ECS_CLUSTER_NAME,
     ECS_SUBNETS: process.env.ECS_SUBNETS,
     ECS_SECURITY_GROUPS: process.env.ECS_SECURITY_GROUPS,
+    EXO_KEY: process.env.EXO_KEY,
+    EXO_SECRET: process.env.EXO_SECRET,
+    EXO_ZONE: process.env.EXO_ZONE,
+    EXO_CLUSTER_ID: process.env.EXO_CLUSTER_ID,
+    BOT_IMAGE_MEET: process.env.BOT_IMAGE_MEET,
+    BOT_IMAGE_TEAMS: process.env.BOT_IMAGE_TEAMS,
+    BOT_IMAGE_ZOOM: process.env.BOT_IMAGE_ZOOM,
+    BOTS_PROVIDER: process.env.BOTS_PROVIDER,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
