@@ -1,11 +1,13 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {PutObjectCommand, S3Client, type S3ClientConfig} from "@aws-sdk/client-s3";
 import { readFileSync, promises as fsPromises } from "fs";
 import { Bot } from "./bot";
 import { randomUUID } from "crypto";
+import dotenv from "dotenv";
 
+dotenv.config();
 /**
  * Creates an S3 Connection to the bucket.
- * 
+ *
  * @returns S3Client
  */
 export function createS3Client(region: string | undefined, accessKeyId: string | undefined, secretKey: string | undefined): S3Client|null {
@@ -15,24 +17,29 @@ export function createS3Client(region: string | undefined, accessKeyId: string |
         if (!region)
             throw new Error("Region is required");
 
+        // Production
+        // Credientials is not required on AWS, so we can use the default constructor.
+        let config:S3ClientConfig  = {
+          region,
+        };
+
         // Create an S3 client with credentials if they are provided
         // Local Development requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
         if (accessKeyId && secretKey) {
-            return new S3Client({
-                region,
-                credentials: {
-                    accessKeyId: accessKeyId,
-                    secretAccessKey: secretKey!,
-                },
-            });
-
-            // Production
-            // Credientials is not required on AWS, so we can use the default constructor.
-        } else {
-            return new S3Client({
-                region,
-            });
+            config = {
+              credentials: {
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretKey!,
+              },
+              ...config
+          };
         }
+
+        if (process.env.AWS_ENDPOINT) {
+          config.endpoint = process.env.AWS_ENDPOINT;
+        }
+
+        return new S3Client(config);
 
     } catch (error) {
         return null;
@@ -40,9 +47,9 @@ export function createS3Client(region: string | undefined, accessKeyId: string |
 }
 
 /**
- * 
- * @param s3Client 
- * @param filePath 
+ *
+ * @param s3Client
+ * @param filePath
  */
 export async function uploadRecordingToS3(s3Client: S3Client, bot: Bot): Promise<string> {
 

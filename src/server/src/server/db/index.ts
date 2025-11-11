@@ -11,13 +11,14 @@ import * as schema from "./schema";
 const globalForDb = globalThis as unknown as {
   conn: postgres.Sql | undefined;
 };
+// choose based on env or URL
+const isLocal =
+    env.DATABASE_URL.includes("localhost") || env.DATABASE_URL.includes("127.0.0.1");
 
 const conn =
   globalForDb.conn ??
   postgres(env.DATABASE_URL, {
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl: isLocal ? false : { rejectUnauthorized: false },
     max: 1,
   });
 if (env.NODE_ENV !== "production") globalForDb.conn = conn;

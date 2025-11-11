@@ -1,11 +1,4 @@
 // exoSksUtil.ts — small helper for Exoscale SKS ↔︎ Kubernetes
-//
-// Usage example (ESM):
-//   import { getKubeConfig, deployImage } from './exoSksUtil.js';
-//   const kubeconf = await getKubeConfig({ apiKey, apiSecret, zone, clusterId });
-//   await deployImage({ kubeConfigYaml: kubeconf, name: 'hello', image: 'nginx:latest', env: { GREETING: '👋' }, expose: true });
-//
-// Requires Node ≥ 18, axios ≥ 1, and @kubernetes/client-node ≥ 0.19
 
 import axios from 'axios';
 import crypto from 'crypto';
@@ -14,13 +7,15 @@ import {tmpdir} from 'os';
 import {join} from 'path';
 import {
   KubeConfig,
-  AppsV1Api,
   CoreV1Api,
-  V1Deployment,
-  V1Service, V1DeploymentSpec, V1PodTemplateSpec, V1Container, V1EnvVar,
+  BatchV1Api,
+  type V1Service,
+  type V1Container,
+  type V1EnvVar,
+  type V1Job,
+  type V1JobSpec,
 } from '@kubernetes/client-node';
-import {V1LabelSelector} from "@kubernetes/client-node/dist/gen/models/V1LabelSelector";
-import {V1PodSpec} from "@kubernetes/client-node/dist/gen/models/V1PodSpec";
+import {type V1PodSpec} from "@kubernetes/client-node/dist/gen/models/V1PodSpec";
 import {env} from "~/env";
 
 export interface ExoConfig {
@@ -70,11 +65,13 @@ export async function getKubeConfig(): Promise<string> {
       },
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!res.data?.kubeconfig) {
       throw new Error('Exoscale response missing "kubeconfig" field');
     }
 
     // Decode base64 to YAML string
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const kubeconfigBase64 = res.data.kubeconfig as string;
     try {
       const kubeconfigYaml = Buffer.from(kubeconfigBase64, 'base64').toString('utf-8');
@@ -108,20 +105,30 @@ export interface DeployImageOptions {
   containerPort?: number;
   /** When true, creates/updates a LoadBalancer Service */
   expose?: boolean;
+  /** TTL in seconds after Job completion before deletion. Set to 0 for immediate deletion (logs will be lost). Default 300 (5 minutes) to allow log collection. */
+  ttlSecondsAfterFinished?: number;
 }
 
 /**
- * Create or patch a Deployment (and optional Service) in the cluster.
+ * Create or patch a Job (and optional Service) in the cluster.
+ * Job configuration:
+ * - backoffLimit: 2 means retry 2 more times on startup failure (3 total attempts)
+ * - restartPolicy: 'Never' means don't restart if it fails during execution
+ * - ttlSecondsAfterFinished: configurable TTL before deletion (default 300s to allow log collection)
+ * 
+ * NOTE: If ttlSecondsAfterFinished is 0, logs will be lost when the pod is deleted.
+ * Consider using a cluster-level logging solution (e.g., Fluentd, Fluent Bit, or similar)
+ * to forward logs to a centralized system before pod deletion.
  */
 export async function deployImage(opts: DeployImageOptions): Promise<void> {
   const {
     name,
     image,
     namespace = 'default',
-    replicas = 1,
     env = {},
     containerPort = 80,
     expose = false,
+    ttlSecondsAfterFinished = 300, // Default 5 minutes to allow log collection
   } = opts;
 
   const kubeConfigYaml = await getKubeConfig();
@@ -133,7 +140,6 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
     // Initialise clients
     const kc = new KubeConfig();
     kc.loadFromFile(tempFilePath);
-    const apps = kc.makeApiClient(AppsV1Api);
     const core = kc.makeApiClient(CoreV1Api);
 
     const selector: V1LabelSelector = {matchLabels: {app: name}};
@@ -141,7 +147,7 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
       name,
       image,
       env: Object.entries(env).map(([k, v]) => {
-        const envVar: V1EnvVar = {name: k, value: v.toString()};
+        const envVar: V1EnvVar = {name: k, value: v?.toString()};
 
         return envVar;
       }),
@@ -151,34 +157,41 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
       containers: [
         container
       ],
+      restartPolicy: 'Never', // Don't restart if container fails during execution
     };
-    const template: V1PodTemplateSpec = {
-      metadata: {labels: {app: name}},
-      spec: templateSpec,
+    
+    // Use Job instead of Deployment for better control over retries and cleanup
+    // Job configuration:
+    // - backoffLimit: 2 means retry 2 more times on failure (3 total attempts)
+    // - restartPolicy: 'Never' means don't restart if it fails during execution
+    // - ttlSecondsAfterFinished: configurable delay before deletion (default 300s to allow log collection)
+    const batch = kc.makeApiClient(BatchV1Api);
+    const jobSpec: V1JobSpec = {
+      backoffLimit: 2, // Retry 2 more times on startup failure (3 total attempts)
+      ttlSecondsAfterFinished: ttlSecondsAfterFinished, // Delay before deletion (0 = immediate, logs will be lost)
+      template: {
+        metadata: {labels: {app: name}},
+        spec: templateSpec,
+      },
     };
-    const spec: V1DeploymentSpec = {
-      replicas,
-      selector,
-      template,
-    };
-    // Build Deployment manifest
-    const deployment: V1Deployment = {
-      apiVersion: 'apps/v1',
-      kind: 'Deployment',
+    const job: V1Job = {
+      apiVersion: 'batch/v1',
+      kind: 'Job',
       metadata: { name },
-      spec
+      spec: jobSpec,
     };
 
-    // Create or replace Deployment
+    // Create or replace Job
     try {
-      await apps.readNamespacedDeployment({name, namespace});
-      const res = await apps.replaceNamespacedDeployment({name, namespace, body: deployment});
-      console.log(`🔄 Updated deployment ${namespace}/${name}`);
-      console.log(res.status?.conditions);
+      await batch.readNamespacedJob({name, namespace});
+      await batch.replaceNamespacedJob({name, namespace, body: job});
+      console.log(`🔄 Updated job ${namespace}/${name}`);
+      /* eslint-disable  @typescript-eslint/no-explicit-any */
     } catch (e: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (e?.code === 404) {
-        await apps.createNamespacedDeployment({namespace, body: deployment});
-        console.log(`✅ Created deployment ${namespace}/${name}`);
+        await batch.createNamespacedJob({namespace, body: job});
+        console.log(`✅ Created job ${namespace}/${name}`);
       } else {
         throw e;
       }
@@ -205,7 +218,9 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
         await core.readNamespacedService({name, namespace});
         await core.replaceNamespacedService({name, namespace, body: service});
         console.log(`🔄 Updated service ${namespace}/${name}`);
+        /* eslint-disable  @typescript-eslint/no-explicit-any */
       } catch (e: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (e?.code === 404) {
           await core.createNamespacedService({namespace, body: service});
           console.log(`✅ Created service ${namespace}/${name}`);

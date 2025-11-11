@@ -43,6 +43,10 @@ export const env = createEnv({
       process.env.NODE_ENV === "test"
         ? z.preprocess(() => "fake_aws_region", z.string())
         : z.string(),
+    AWS_ENDPOINT:
+      process.env.NODE_ENV === "test"
+        ? z.preprocess(() => "fake_aws_endpoint", z.string())
+        : z.string(),
     ECS_TASK_DEFINITION_MEET:
       process.env.NODE_ENV === "production"
         ? z.string()
@@ -81,6 +85,7 @@ export const env = createEnv({
     BOT_IMAGE_TEAMS: z.string().default("ghcr.io/meetingbot/bots/teams:main"),
     BOT_IMAGE_ZOOM: z.string().default("ghcr.io/meetingbot/bots/zoom:main"),
     BOTS_PROVIDER: z.string().default("AWS"),
+    API_URL: z.string().default("http://localhost:3000/api/"),
   },
 
   /**
@@ -107,6 +112,7 @@ export const env = createEnv({
     AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
     AWS_BUCKET_NAME: process.env.AWS_BUCKET_NAME,
     AWS_REGION: process.env.AWS_REGION,
+    AWS_ENDPOINT: process.env.AWS_ENDPOINT,
     ECS_TASK_DEFINITION_MEET: process.env.ECS_TASK_DEFINITION_MEET,
     ECS_TASK_DEFINITION_TEAMS: process.env.ECS_TASK_DEFINITION_TEAMS,
     ECS_TASK_DEFINITION_ZOOM: process.env.ECS_TASK_DEFINITION_ZOOM,
@@ -121,6 +127,7 @@ export const env = createEnv({
     BOT_IMAGE_TEAMS: process.env.BOT_IMAGE_TEAMS,
     BOT_IMAGE_ZOOM: process.env.BOT_IMAGE_ZOOM,
     BOTS_PROVIDER: process.env.BOTS_PROVIDER,
+    API_URL: process.env.API_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

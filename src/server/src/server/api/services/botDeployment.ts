@@ -29,11 +29,7 @@ if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
 }
 
 const client = new ECSClient(config);
-import dotenv from 'dotenv';
 import {deployImage} from './exoSksUtil';
-
-// Load environment variables from .env file
-dotenv.config();
 
 /**
  * Selects the appropriate bot task definition based on meeting information
@@ -140,11 +136,17 @@ export async function deployBot({
       });
     } else if (env.BOTS_PROVIDER.toLowerCase() === 'exoscale') {
       await deployImage({
-        name: bot.meetingInfo.platform.concat('-').concat(botId),
+        name: (bot?.meetingInfo?.platform ?? 'botId').concat('-').concat(botId.toString()),
         image: selectBotImage(bot.meetingInfo),
         env: {
-          ...process.env,
+          AWS_ACCESS_KEY_ID: env.AWS_ACCESS_KEY_ID,
+          AWS_SECRET_ACCESS_KEY: env.AWS_SECRET_ACCESS_KEY,
+          AWS_BUCKET_NAME: env.AWS_BUCKET_NAME,
+          AWS_REGION: env.AWS_REGION,
+          AWS_ENDPOINT: env.AWS_ENDPOINT,
+          NODE_ENV: env.NODE_ENV,
           BOT_DATA: JSON.stringify(config),
+          BACKEND_URL: path.resolve(env.API_URL || '','trpc')
         },
         expose: false,
       });

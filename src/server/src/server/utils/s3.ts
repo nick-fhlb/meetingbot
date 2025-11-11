@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import {S3Client, GetObjectCommand, S3ClientConfig} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "~/env";
 
@@ -14,10 +14,14 @@ class S3ClientSingleton {
       : undefined;
 
   public static getInstance(): S3Client {
-    S3ClientSingleton.instance ??= new S3Client({
+    const config: S3ClientConfig = {
       region: env.AWS_REGION,
       credentials: this.credentials,
-    });
+    };
+    if (env.AWS_ENDPOINT) {
+      config.endpoint = env.AWS_ENDPOINT;
+    }
+    S3ClientSingleton.instance ??= new S3Client(config);
 
     return S3ClientSingleton.instance;
   }
