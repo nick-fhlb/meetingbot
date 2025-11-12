@@ -135,6 +135,13 @@ export async function deployBot({
         console.error(`Bot ${botId} process error:`, error);
       });
     } else if (env.BOTS_PROVIDER.toLowerCase() === 'exoscale') {
+      let apiUrl = 'http://localhost:3000/api/trpc';
+      try {
+         apiUrl = new URL('/trpc', env.API_URL || '').toString();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        // Doing nothing
+      }
       await deployImage({
         name: (bot?.meetingInfo?.platform ?? 'botId').concat('-').concat(botId.toString()),
         image: selectBotImage(bot.meetingInfo),
@@ -146,7 +153,7 @@ export async function deployBot({
           AWS_ENDPOINT: env.AWS_ENDPOINT,
           NODE_ENV: env.NODE_ENV,
           BOT_DATA: JSON.stringify(config),
-          BACKEND_URL: path.resolve(env.API_URL || '','trpc')
+          BACKEND_URL: apiUrl
         },
         expose: false,
       });

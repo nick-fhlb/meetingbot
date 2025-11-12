@@ -13,7 +13,7 @@ import {
   type V1Container,
   type V1EnvVar,
   type V1Job,
-  type V1JobSpec,
+  type V1JobSpec, type V1LabelSelector,
 } from '@kubernetes/client-node';
 import {type V1PodSpec} from "@kubernetes/client-node/dist/gen/models/V1PodSpec";
 import {env} from "~/env";
@@ -100,7 +100,7 @@ export interface DeployImageOptions {
   /** Replica count, default 1 */
   replicas?: number;
   /** Env vars as key–value map */
-  env?: Record<string, string>;
+  env?: Record<string, string|undefined>;
   /** Container port to expose, default 80 */
   containerPort?: number;
   /** When true, creates/updates a LoadBalancer Service */

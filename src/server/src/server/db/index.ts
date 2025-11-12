@@ -12,8 +12,8 @@ const globalForDb = globalThis as unknown as {
   conn: postgres.Sql | undefined;
 };
 // choose based on env or URL
-const isLocal =
-    env.DATABASE_URL.includes("localhost") || env.DATABASE_URL.includes("127.0.0.1");
+const isLocal = env.DATABASE_URL &&
+    (env.DATABASE_URL.includes("localhost") || env.DATABASE_URL.includes("127.0.0.1"));
 
 const conn =
   globalForDb.conn ??
