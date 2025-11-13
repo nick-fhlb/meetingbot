@@ -586,11 +586,11 @@ export class MeetsBot extends Bot {
   async handleInfoPopup(timeout = 5000) {
     try {
       await this.page.waitForSelector(infoPopupClick, { timeout });
+      console.log("Clicking the popup...");
+      await this.page.click(infoPopupClick);
     } catch (e) {
       return;
     }
-    console.log("Clicking the popup...");
-    await this.page.click(infoPopupClick);
   }
 
   /**
@@ -776,14 +776,16 @@ export class MeetsBot extends Bot {
         console.log("Using new People button selector.");
       } else {
         console.warn("People button not found, using fallback selector.");
-        await this.page.click(peopleButton);
+        await this.page.click(peopleButton, {
+          timeout: 2000 // Checking every 2 secs
+        });
       }
 
       // Wait for the people panel to be visible
       await this.page.waitForSelector('[aria-label="Participants"]', {
         state: "visible",
+        timeout: 2000 // Checking every 2 secs
       });
-
       // Panel is visible, setting up the listener
       await this.listenParticipants();
     } catch (error) {
@@ -919,7 +921,6 @@ export class MeetsBot extends Bot {
               console.log("Removed Node", node);
               if (
                   node.nodeType === Node.ELEMENT_NODE &&
-                  node.getAttribute &&
                   node.getAttribute("data-participant-id") &&
                   window.participantArray.find(
                       (p: Participant) =>
@@ -948,7 +949,6 @@ export class MeetsBot extends Bot {
           mutation.addedNodes.forEach((node: any) => {
             console.log("Added Node", node);
             if (
-                node.getAttribute &&
                 node.getAttribute("data-participant-id") &&
                 !window.participantArray.find(
                     (p: Participant) =>
