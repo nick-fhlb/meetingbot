@@ -379,6 +379,7 @@ export class MeetsBot extends Bot {
     console.log("Joined Call.");
     await this.onEvent(EventCode.JOINING_CALL);
 
+    this.checkParticipants();
     //Done.
     return 0;
   }
@@ -614,37 +615,6 @@ export class MeetsBot extends Bot {
     console.log("Waiting for the 'Others might see you differently' popup...");
     await this.handleInfoPopup();
 
-    try {
-      // UI patch: Find new people icon and click parent button
-      const hasPeopleIcon = await this.page.evaluate(() => {
-        const peopleButtonChild = Array.from(
-          document.querySelectorAll("i")
-        ).find((el) => el.textContent?.trim() === "people");
-        if (peopleButtonChild) {
-          const newPeopleButton = peopleButtonChild.closest("button");
-          if (newPeopleButton) {
-            newPeopleButton.click();
-            return true;
-          }
-        }
-        return false;
-      });
-
-      if (hasPeopleIcon) {
-        console.log("Using new People button selector.");
-      } else {
-        console.warn("People button not found, using fallback selector.");
-        await this.page.click(peopleButton);
-      }
-
-      // Wait for the people panel to be visible
-      await this.page.waitForSelector('[aria-label="Participants"]', {
-        state: "visible",
-      });
-    } catch (error) {
-      console.warn("Could not click People button. Continuing anyways.");
-      }
-
     await this.page.exposeFunction("getParticipants", () => {
       return this.participants;
     });
@@ -686,189 +656,7 @@ export class MeetsBot extends Bot {
       }
     );
 
-    // Add mutation observer for participant list
-    // Use in the browser context to monitor for participants joining and leaving
-    await this.page.evaluate(() => {
-      const peopleList = document.querySelector('[aria-label="Participants"]');
-      if (!peopleList) {
-        console.error("Could not find participants list element");
-        return;
-      }
 
-      const initialParticipants = Array.from(peopleList.childNodes).filter(
-        (node) => node.nodeType === Node.ELEMENT_NODE
-      );
-      window.participantArray = [];
-      window.mergedAudioParticipantArray = [];
-
-      window.observeSpeech = (node, participant) => {
-        console.debug("Observing speech for participant:", participant.name);
-        const activityObserver = new MutationObserver((mutations) => {
-          mutations.forEach(() => {
-            window.registerParticipantSpeaking(participant);
-          });
-        });
-        activityObserver.observe(node, {
-          attributes: true,
-          subtree: true,
-          childList: true,
-          attributeFilter: ["class"],
-        });
-        participant.observer = activityObserver;
-      };
-
-      window.handleMergedAudio = () => {
-        const mergedAudioNode = document.querySelector(
-          '[aria-label="Merged audio"]'
-        );
-        if (mergedAudioNode) {
-          const detectedParticipants: Participant[] = [];
-          
-          // Gather all participants in the merged audio node
-          mergedAudioNode.parentNode!.childNodes.forEach((childNode: any) => {
-            const participantId = childNode.getAttribute("data-participant-id");
-            if (!participantId) {
-              return;
-            }
-            detectedParticipants.push({
-              id: participantId,
-              name: childNode.getAttribute("aria-label"),
-            });
-          });
-
-          // detected new participant in the merged node
-          if (
-            detectedParticipants.length >
-            window.mergedAudioParticipantArray.length
-          ) {
-            // add them
-            const filteredParticipants = detectedParticipants.filter(
-              (participant: Participant) =>
-                !window.mergedAudioParticipantArray.find(
-                  (p: Participant) => p.id === participant.id
-                )
-            );
-            filteredParticipants.forEach((participant: Participant) => {
-              const vidBlock = document.querySelector(
-                `[data-requested-participant-id="${participant.id}"]`
-              );
-              window.mergedAudioParticipantArray.push(participant);
-              window.onParticipantJoin(participant);
-              window.observeSpeech(vidBlock, participant);
-              window.participantArray.push(participant);
-            });
-          } else if (
-            detectedParticipants.length <
-            window.mergedAudioParticipantArray.length
-          ) {
-            // some participants no longer in the merged node
-            const filteredParticipants =
-              window.mergedAudioParticipantArray.filter(
-                (participant: Participant) =>
-                  !detectedParticipants.find(
-                    (p: Participant) => p.id === participant.id
-                  )
-              );
-            filteredParticipants.forEach((participant: Participant) => {
-              const videoRectangle = document.querySelector(
-                `[data-requested-participant-id="${participant.id}"]`
-              );
-              if (!videoRectangle) {
-                // they've left the meeting
-                window.onParticipantLeave(participant);
-                window.participantArray = window.participantArray.filter(
-                  (p: Participant) => p.id !== participant.id
-                );
-              }
-
-              // update participants under merged audio
-              window.mergedAudioParticipantArray =
-                window.mergedAudioParticipantArray.filter(
-                  (p: Participant) => p.id !== participant.id
-                );
-            });
-          }
-        }
-      };
-
-      initialParticipants.forEach((node: any) => {
-        const participant = {
-          id: node.getAttribute("data-participant-id"),
-          name: node.getAttribute("aria-label"),
-        };
-        if (!participant.id) {
-          window.handleMergedAudio();
-          return;
-        }
-        window.onParticipantJoin(participant);
-        window.observeSpeech(node, participant);
-        window.participantArray.push(participant);
-      });
-
-      console.log("Setting up mutation observer on participants list");
-      const peopleObserver = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.type === "childList") {
-            mutation.removedNodes.forEach((node: any) => {
-              console.log("Removed Node", node);
-              if (
-                node.nodeType === Node.ELEMENT_NODE &&
-                node.getAttribute &&
-                node.getAttribute("data-participant-id") &&
-                window.participantArray.find(
-                  (p: Participant) =>
-                    p.id === node.getAttribute("data-participant-id")
-                )
-              ) {
-                console.log(
-                  "Participant left:",
-                  node.getAttribute("aria-label")
-                );
-                window.onParticipantLeave({
-                  id: node.getAttribute("data-participant-id"),
-                  name: node.getAttribute("aria-label"),
-                });
-                window.participantArray = window.participantArray.filter(
-                  (p: Participant) =>
-                    p.id !== node.getAttribute("data-participant-id")
-                );
-              } else if (
-                document.querySelector('[aria-label="Merged audio"]')
-              ) {
-                window.handleMergedAudio();
-              }
-            });
-          }
-          mutation.addedNodes.forEach((node: any) => {
-            console.log("Added Node", node);
-            if (
-                node.getAttribute &&
-              node.getAttribute("data-participant-id") &&
-              !window.participantArray.find(
-                (p: Participant) =>
-                  p.id === node.getAttribute("data-participant-id")
-              )
-              ) {
-                console.log(
-                "Participant joined:",
-                  node.getAttribute("aria-label")
-                );
-                    const participant = {
-                      id: node.getAttribute("data-participant-id"),
-                      name: node.getAttribute("aria-label"),
-                    };
-              window.onParticipantJoin(participant);
-              window.observeSpeech(node, participant);
-              window.participantArray.push(participant);
-            } else if (document.querySelector('[aria-label="Merged audio"]')) {
-              window.handleMergedAudio();
-              }
-            });
-        });
-      });
-
-      peopleObserver.observe(peopleList, { childList: true, subtree: true });
-    });
 
     // Loop -- check for end meeting conditions every second
     console.log("Waiting until a leave condition is fulfilled..");
@@ -966,4 +754,228 @@ export class MeetsBot extends Bot {
     await this.endLife();
     return 0;
   }
+
+  async checkParticipants() {
+    try {
+      // UI patch: Find new people icon and click parent button
+      const hasPeopleIcon = await this.page.evaluate(() => {
+        const peopleButtonChild = Array.from(
+            document.querySelectorAll("i")
+        ).find((el) => el.textContent?.trim() === "people");
+        if (peopleButtonChild) {
+          const newPeopleButton = peopleButtonChild.closest("button");
+          if (newPeopleButton) {
+            newPeopleButton.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (hasPeopleIcon) {
+        console.log("Using new People button selector.");
+      } else {
+        console.warn("People button not found, using fallback selector.");
+        await this.page.click(peopleButton);
+      }
+
+      // Wait for the people panel to be visible
+      await this.page.waitForSelector('[aria-label="Participants"]', {
+        state: "visible",
+      });
+
+      // Panel is visible, setting up the listener
+      await this.listenParticipants();
+    } catch (error) {
+      await this.checkParticipants();
+    }
+  }
+
+  async listenParticipants() {
+    // Add mutation observer for participant list
+    // Use in the browser context to monitor for participants joining and leaving
+    await this.page.evaluate(() => {
+      const peopleList = document.querySelector('[aria-label="Participants"]');
+      if (!peopleList) {
+        console.error("Could not find participants list element");
+        return;
+      }
+
+      const initialParticipants = Array.from(peopleList.childNodes).filter(
+          (node) => node.nodeType === Node.ELEMENT_NODE
+      );
+      window.participantArray = [];
+      window.mergedAudioParticipantArray = [];
+
+      window.observeSpeech = (node, participant) => {
+        console.debug("Observing speech for participant:", participant.name);
+        const activityObserver = new MutationObserver((mutations) => {
+          mutations.forEach(() => {
+            window.registerParticipantSpeaking(participant);
+          });
+        });
+        activityObserver.observe(node, {
+          attributes: true,
+          subtree: true,
+          childList: true,
+          attributeFilter: ["class"],
+        });
+        participant.observer = activityObserver;
+      };
+
+      window.handleMergedAudio = () => {
+        const mergedAudioNode = document.querySelector(
+            '[aria-label="Merged audio"]'
+        );
+        if (mergedAudioNode) {
+          const detectedParticipants: Participant[] = [];
+
+          // Gather all participants in the merged audio node
+          mergedAudioNode.parentNode!.childNodes.forEach((childNode: any) => {
+            const participantId = childNode.getAttribute("data-participant-id");
+            if (!participantId) {
+              return;
+            }
+            detectedParticipants.push({
+              id: participantId,
+              name: childNode.getAttribute("aria-label"),
+            });
+          });
+
+          // detected new participant in the merged node
+          if (
+              detectedParticipants.length >
+              window.mergedAudioParticipantArray.length
+          ) {
+            // add them
+            const filteredParticipants = detectedParticipants.filter(
+                (participant: Participant) =>
+                    !window.mergedAudioParticipantArray.find(
+                        (p: Participant) => p.id === participant.id
+                    )
+            );
+            filteredParticipants.forEach((participant: Participant) => {
+              const vidBlock = document.querySelector(
+                  `[data-requested-participant-id="${participant.id}"]`
+              );
+              window.mergedAudioParticipantArray.push(participant);
+              window.onParticipantJoin(participant);
+              window.observeSpeech(vidBlock, participant);
+              window.participantArray.push(participant);
+            });
+          } else if (
+              detectedParticipants.length <
+              window.mergedAudioParticipantArray.length
+          ) {
+            // some participants no longer in the merged node
+            const filteredParticipants =
+                window.mergedAudioParticipantArray.filter(
+                    (participant: Participant) =>
+                        !detectedParticipants.find(
+                            (p: Participant) => p.id === participant.id
+                        )
+                );
+            filteredParticipants.forEach((participant: Participant) => {
+              const videoRectangle = document.querySelector(
+                  `[data-requested-participant-id="${participant.id}"]`
+              );
+              if (!videoRectangle) {
+                // they've left the meeting
+                window.onParticipantLeave(participant);
+                window.participantArray = window.participantArray.filter(
+                    (p: Participant) => p.id !== participant.id
+                );
+              }
+
+              // update participants under merged audio
+              window.mergedAudioParticipantArray =
+                  window.mergedAudioParticipantArray.filter(
+                      (p: Participant) => p.id !== participant.id
+                  );
+            });
+          }
+        }
+      };
+
+      initialParticipants.forEach((node: any) => {
+        const participant = {
+          id: node.getAttribute("data-participant-id"),
+          name: node.getAttribute("aria-label"),
+        };
+        if (!participant.id) {
+          window.handleMergedAudio();
+          return;
+        }
+        window.onParticipantJoin(participant);
+        window.observeSpeech(node, participant);
+        window.participantArray.push(participant);
+      });
+
+      console.log("Setting up mutation observer on participants list");
+      const peopleObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === "childList") {
+            mutation.removedNodes.forEach((node: any) => {
+              console.log("Removed Node", node);
+              if (
+                  node.nodeType === Node.ELEMENT_NODE &&
+                  node.getAttribute &&
+                  node.getAttribute("data-participant-id") &&
+                  window.participantArray.find(
+                      (p: Participant) =>
+                          p.id === node.getAttribute("data-participant-id")
+                  )
+              ) {
+                console.log(
+                    "Participant left:",
+                    node.getAttribute("aria-label")
+                );
+                window.onParticipantLeave({
+                  id: node.getAttribute("data-participant-id"),
+                  name: node.getAttribute("aria-label"),
+                });
+                window.participantArray = window.participantArray.filter(
+                    (p: Participant) =>
+                        p.id !== node.getAttribute("data-participant-id")
+                );
+              } else if (
+                  document.querySelector('[aria-label="Merged audio"]')
+              ) {
+                window.handleMergedAudio();
+              }
+            });
+          }
+          mutation.addedNodes.forEach((node: any) => {
+            console.log("Added Node", node);
+            if (
+                node.getAttribute &&
+                node.getAttribute("data-participant-id") &&
+                !window.participantArray.find(
+                    (p: Participant) =>
+                        p.id === node.getAttribute("data-participant-id")
+                )
+            ) {
+              console.log(
+                  "Participant joined:",
+                  node.getAttribute("aria-label")
+              );
+              const participant = {
+                id: node.getAttribute("data-participant-id"),
+                name: node.getAttribute("aria-label"),
+              };
+              window.onParticipantJoin(participant);
+              window.observeSpeech(node, participant);
+              window.participantArray.push(participant);
+            } else if (document.querySelector('[aria-label="Merged audio"]')) {
+              window.handleMergedAudio();
+            }
+          });
+        });
+      });
+
+      peopleObserver.observe(peopleList, { childList: true, subtree: true });
+    });
+  }
 }
+
+
