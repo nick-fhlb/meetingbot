@@ -137,7 +137,7 @@ export async function deployBot({
     } else if (env.BOTS_PROVIDER.toLowerCase() === 'exoscale') {
       let apiUrl = 'http://localhost:3000/api/trpc';
       try {
-         apiUrl = new URL('/trpc', env.API_URL || '').toString();
+         apiUrl = new URL('/api/trpc', env.API_URL || '').toString();
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
         // Doing nothing
