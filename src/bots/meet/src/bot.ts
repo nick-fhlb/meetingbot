@@ -29,6 +29,7 @@ const peopleButton = `//button[@aria-label="People"]`;
 const onePersonRemainingField = '//span[.//div[text()="Contributors"]]//div[text()="1"]';
 const muteButton = `[aria-label*="Turn off microphone"]`; // *= -> conatins
 const cameraOffButton = `[aria-label*="Turn off camera"]`;
+const joinedSelector = `[aria-label*="Send a reaction"]`;
 
 const infoPopupClick = `//button[.//span[text()="Got it"]]`;
 
@@ -129,6 +130,7 @@ export class MeetsBot extends Bot {
   page!: Page;
   recorder: PageVideoCapture | undefined;
   kicked: boolean = false;
+  canceled: boolean = false;
   recordingPath: string;
   participants: Participant[] = [];
 
@@ -365,12 +367,13 @@ export class MeetsBot extends Bot {
     console.log("Awaiting Entry ....");
     const timeout = this.settings.automaticLeave.waitingRoomTimeout; // in milliseconds
 
-    // wait for the leave button to appear (meaning we've joined the meeting)
+    // wait for the specific element to appear (meaning we've joined the meeting)
     try {
-      await this.page.waitForSelector(leaveButton, {
+      await this.page.waitForSelector(joinedSelector, {
         timeout: timeout,
       });
     } catch (e) {
+      this.canceled = true;
       // Timeout Error: Will get caught by bot/index.ts
       throw new WaitingRoomTimeoutError();
     }

@@ -13,10 +13,12 @@ export interface BotInterface {
   joinMeeting(): Promise<any>;
   endLife(): Promise<any>;
   checkKicked(): Promise<boolean>;
+  canceled: boolean;
 }
 
 export class Bot implements BotInterface {
   readonly settings: BotConfig;
+  canceled: boolean;
   onEvent: (eventType: EventCode, data?: any) => Promise<void>;
 
   constructor(

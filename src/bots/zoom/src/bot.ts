@@ -8,12 +8,12 @@ import path from "path";
 
 
 // const muteButton = 'button[aria-label="Mute"]';
-// const stopVideoButton = 'button[aria-label="Stop Video"]';
+const stopVideoButton = 'button[aria-label="Stop Video"]';
 // Constant Selectors
 
 // Replaced buttons selector with IDs to avoid possible language mismatch
 const muteButton = '#preview-audio-control-button';
-const stopVideoButton = '#preview-video-control-button';
+// const stopVideoButton = '#preview-video-control-button';
 const joinButton = 'button.zm-btn.preview-join-button';
 const leaveButton = 'button[aria-label="Leave"]';
 const acceptCookiesButton = '#onetrust-accept-btn-handler';
@@ -164,13 +164,18 @@ export class ZoomBot extends Bot {
       // The timeout is big to make sure buttons are initialized. With smaller one click doesn't work randomly and bot joins the meeting with sound and/or video
       await new Promise((resolve) => setTimeout(resolve, 6000));
 
+      try {
+        await frame.waitForSelector(stopVideoButton, {timeout: 2000});
+        await frame.click(stopVideoButton);
+        console.log("Stopped video");
+      } catch (e) {
+        console.log("Video wasn't enabled");
+      }
+
+
       await frame.waitForSelector(muteButton);
       await frame.click(muteButton);
       console.log("Muted");
-
-      await frame.waitForSelector(stopVideoButton);
-      await frame.click(stopVideoButton);
-      console.log("Stopped video");
 
       // Waits for the input field and types the name from the config
       await frame.waitForSelector("#input-for-name");
@@ -183,12 +188,13 @@ export class ZoomBot extends Bot {
       console.log("Joined the meeting");
 
       // wait for the leave button to appear (meaning we've joined the meeting)
-      await new Promise((resolve) => setTimeout(resolve, 1400)); // Needed to wait for the aria-label to be properly attached
+      await new Promise((resolve) => setTimeout(resolve, 2400)); // Needed to wait for the aria-label to be properly attached
       try {
         await frame.waitForSelector(leaveButton, {
           timeout: this.settings.automaticLeave.waitingRoomTimeout,
         });
       } catch (error) {
+        this.canceled = true;
         // Distinct error from regular timeout
         throw new WaitingRoomTimeoutError();
       }
@@ -310,7 +316,7 @@ export class ZoomBot extends Bot {
             setTimeout(poll, 60000);
           } else {
             // Leave button not found within timeout window
-            console.error("Meeting ended unexpectedly");
+            console.error("Meeting ended unexpectedly 1");
 
             this.stopRecording();
             this.endLife();
@@ -321,7 +327,7 @@ export class ZoomBot extends Bot {
           // Only treat a timeout as “meeting ended”; rethrow anything else.
           // @ts-ignore
           if (err?.name === "TimeoutError") {
-            console.error("Meeting ended unexpectedly");
+            console.error("Meeting ended unexpectedly 2");
 
             this.stopRecording();
             this.endLife();

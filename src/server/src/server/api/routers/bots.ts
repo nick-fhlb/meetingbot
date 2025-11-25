@@ -202,26 +202,25 @@ export const botsRouter = createTRPCRouter({
         throw new Error("Bot not found");
       }
 
-      if (input.status === "DONE") {
+      if (input.recording) {
         // add the recording to the bot
         await ctx.db
-          .update(bots)
-          .set({ recording: input.recording, speakerTimeframes: input.speakerTimeframes })
-          .where(eq(bots.id, bot.id));
-
-        if (bot.callbackUrl) {
-          // call the callback url
-          try {
-            await fetch(bot.callbackUrl, {
-              method: 'POST',
-              body: JSON.stringify({
-                botId: bot.id,
-                status: input.status,
-              }),
-            })
-          } catch (error) {
-            console.error('Error calling callback URL:', error)
-          }
+            .update(bots)
+            .set({recording: input.recording, speakerTimeframes: input.speakerTimeframes})
+            .where(eq(bots.id, bot.id));
+      }
+      if (bot.callbackUrl) {
+        // call the callback url
+        try {
+          await fetch(bot.callbackUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+              botId: bot.id,
+              status: input.status,
+            }),
+          })
+        } catch (error) {
+          console.error('Error calling callback URL:', error)
         }
       }
       return result[0];

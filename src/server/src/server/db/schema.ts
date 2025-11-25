@@ -196,6 +196,7 @@ export const status = z.enum([
   "CALL_ENDED",
   "DONE",
   "FATAL",
+  "CANCELED",
 ]);
 export type Status = z.infer<typeof status>;
 
@@ -227,6 +228,7 @@ export const EVENT_DESCRIPTIONS = {
   FATAL:
     "The bot has encountered an error. The data.sub_code and data.description will contain the reason for the failure.",
   LOG: "Catch-all for any logs that were produced that don't fit any other event type. The data.message will contain the log contents.",
+  CANCELED: "The bot tried to join the call but nobody else joined",
 } as const;
 
 // Define event codes with descriptions

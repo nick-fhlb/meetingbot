@@ -1,8 +1,8 @@
-import { Bot, createBot } from "./bot";
+import {createBot} from "./bot";
 import dotenv from "dotenv";
-import { startHeartbeat, reportEvent } from "./monitoring";
-import { EventCode, type BotConfig } from "./types";
-import { createS3Client, uploadRecordingToS3 } from "./s3";
+import {reportEvent, startHeartbeat} from "./monitoring";
+import {type BotConfig, EventCode} from "./types";
+import {createS3Client, uploadRecordingToS3} from "./s3";
 
 dotenv.config({path: '../test.env'}); // Load test.env for testing
 dotenv.config();
@@ -59,20 +59,25 @@ export const main = async () => {
     await bot.run().catch(async (error) => {
 
       console.error("Error running bot:", error);
-      await reportEvent(botId, EventCode.FATAL, {
+      await reportEvent(botId, bot.canceled ? EventCode.CANCELED : EventCode.FATAL, {
         description: (error as Error).message,
       });
 
-      // Check what's on the screen in case of an error
-      bot.screenshot();
+      if (!bot.canceled) {
+        // Check what's on the screen in case of an error
+        bot.screenshot();
+      }
+
 
       // **Ensure** the bot cleans up its resources after a breaking error
       await bot.endLife();
     });
 
-    // Upload recording to S3
-    console.log("Start Upload to S3...");
-    key = await uploadRecordingToS3(s3Client, bot);
+    if (!bot.canceled) {
+      // Upload recording to S3
+      console.log("Start Upload to S3...");
+      key = await uploadRecordingToS3(s3Client, bot);
+    }
 
 
   } catch (error) {
@@ -87,8 +92,8 @@ export const main = async () => {
   heartbeatController.abort();
   console.log("Bot execution completed, heartbeat stopped.");
 
-  // Only report DONE if no error occurred
-  if (!hasErrorOccurred) {
+  // Only report DONE if no error occurred or meeting wasn't canceled
+  if (!hasErrorOccurred && !bot.canceled) {
     // Report final DONE event
     const speakerTimeframes = bot.getSpeakerTimeframes();
     console.debug("Speaker timeframes:", speakerTimeframes);

@@ -39,6 +39,7 @@ export enum Status {
   CALL_ENDED = "CALL_ENDED",
   DONE = "DONE",
   FATAL = "FATAL",
+  CANCELED = "CANCELED",
 }
 
 export enum EventCode {
@@ -53,6 +54,7 @@ export enum EventCode {
   PARTICIPANT_JOIN = "PARTICIPANT_JOIN",
   PARTICIPANT_LEAVE = "PARTICIPANT_LEAVE",
   LOG = "LOG",
+  CANCELED = Status.CANCELED,
 }
 
 export class WaitingRoomTimeoutError extends Error {
