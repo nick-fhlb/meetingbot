@@ -13,10 +13,12 @@ import {
   type V1Container,
   type V1EnvVar,
   type V1Job,
-  type V1JobSpec, type V1LabelSelector,
+  type V1JobSpec, type V1LabelSelector, V1ResourceRequirements,
 } from '@kubernetes/client-node';
 import {type V1PodSpec} from "@kubernetes/client-node/dist/gen/models/V1PodSpec";
 import {env} from "~/env";
+
+const envExt = env;
 
 export interface ExoConfig {
   apiKey: string;
@@ -115,7 +117,7 @@ export interface DeployImageOptions {
  * - backoffLimit: 2 means retry 2 more times on startup failure (3 total attempts)
  * - restartPolicy: 'Never' means don't restart if it fails during execution
  * - ttlSecondsAfterFinished: configurable TTL before deletion (default 300s to allow log collection)
- * 
+ *
  * NOTE: If ttlSecondsAfterFinished is 0, logs will be lost when the pod is deleted.
  * Consider using a cluster-level logging solution (e.g., Fluentd, Fluent Bit, or similar)
  * to forward logs to a centralized system before pod deletion.
@@ -143,6 +145,18 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
     const core = kc.makeApiClient(CoreV1Api);
 
     const selector: V1LabelSelector = {matchLabels: {app: name}};
+    const containerRequirements: V1ResourceRequirements = {
+      requests: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        cpu: envExt.EXO_POD_REQUEST_CPU,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        memory: envExt.EXO_POD_REQUEST_MEMORY
+      },
+      limits: {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        memory: envExt.EXO_POD_LIMIT_MEMORY
+      }
+    };
     const container: V1Container = {
       name,
       image,
@@ -152,6 +166,7 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
         return envVar;
       }),
       ports: [{containerPort}],
+      resources: containerRequirements
     };
     const templateSpec: V1PodSpec = {
       containers: [
@@ -229,6 +244,8 @@ export async function deployImage(opts: DeployImageOptions): Promise<void> {
         }
       }
     }
+  } catch (e) {
+    console.error(e);
   } finally {
     // Clean up temporary file
     try {
