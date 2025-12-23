@@ -89,8 +89,7 @@ export async function deployBot({
     throw new Error("Bot not found");
   }
   const bot = botResult[0];
-  // const dev = env.NODE_ENV === "development";
-  const dev = false;
+  const dev = env.NODE_ENV === "development";
 
   // First, update bot status to deploying
   await db.update(bots).set({status: "DEPLOYING"}).where(eq(bots.id, botId));

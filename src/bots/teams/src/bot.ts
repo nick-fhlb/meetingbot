@@ -1,13 +1,12 @@
 import fs from "fs";
-import puppeteer, { Browser, Page } from "puppeteer";
-import { launch, getStream, wss } from "puppeteer-stream";
-import { BotConfig, EventCode, SpeakerTimeframe, WaitingRoomTimeoutError } from "../../src/types";
-import { Bot } from "../../src/bot";
+import puppeteer, {Browser, Page} from "puppeteer";
+import {launch, getStream, wss} from "puppeteer-stream";
+import {BotConfig, EventCode, SpeakerTimeframe, WaitingRoomTimeoutError} from "../../src/types";
+import {Bot} from "../../src/bot";
 import path from "path";
-import { Transform } from "stream";
+import {Transform} from "stream";
 
-const leaveButtonSelector =
-  'button[aria-label="Leave (Ctrl+Shift+H)"], button[aria-label="Leave (⌘+Shift+H)"]';
+const leaveButtonSelector = 'button#hangup-button';
 
 export class TeamsBot extends Bot {
   recordingPath: string;
@@ -15,21 +14,28 @@ export class TeamsBot extends Bot {
   url: string;
   participants: string[];
   participantsIntervalId: NodeJS.Timeout;
+  activityIntervalId: NodeJS.Timeout;
   browser!: Browser;
   page!: Page;
   file!: fs.WriteStream;
   stream!: Transform;
+  private timeAloneStarted: number = Infinity;
+  private lastActivity: number | null = null;
+  private ended: boolean = false;
 
   constructor(
-    botSettings: BotConfig,
-    onEvent: (eventType: EventCode, data?: any) => Promise<void>
+      botSettings: BotConfig,
+      onEvent: (eventType: EventCode, data?: any) => Promise<void>
   ) {
     super(botSettings, onEvent);
-    this.recordingPath = "./recording.webm";
-    this.contentType = "video/webm";
-    this.url = `https://teams.microsoft.com/v2/?meetingjoin=true#/l/meetup-join/19:meeting_${this.settings.meetingInfo.meetingId}@thread.v2/0?context=%7b%22Tid%22%3a%22${this.settings.meetingInfo.tenantId}%22%2c%22Oid%22%3a%22${this.settings.meetingInfo.organizerId}%22%7d&anon=true`;
+    this.recordingPath = "./recording.mp4";
+    this.contentType = "video/mp4";
+    this.url = `https://teams.live.com/meet/${this.settings.meetingInfo.meetingId}?p=${this.settings.meetingInfo.meetingPassword}`;
     this.participants = [];
-    this.participantsIntervalId = setInterval(() => { }, 0);
+    this.participantsIntervalId = setInterval(() => {
+    }, 0);
+    this.activityIntervalId = setInterval(() => {
+    }, 0);
   }
 
   getRecordingPath(): string {
@@ -60,7 +66,7 @@ export class TeamsBot extends Bot {
       fs.writeFileSync(screenshotPath, screenshot);
       console.log(`Screenshot saved to ${screenshotPath}`);
     } catch (e) {
-      console.log('Error taking screenshot:', e);
+      console.log('Error taking screenshot:');
     }
   }
 
@@ -102,8 +108,8 @@ export class TeamsBot extends Bot {
 
     // Fill in the display name
     await this.page
-      .locator(`[data-tid="prejoin-display-name-input"]`)
-      .fill(this.settings.botDisplayName ?? "Meeting Bot");
+        .locator(`[data-tid="prejoin-display-name-input"]`)
+        .fill(this.settings.botDisplayName ?? "Meeting Bot");
     console.log('Entered Display Name');
 
     // Mute microphone before joining
@@ -116,29 +122,30 @@ export class TeamsBot extends Bot {
 
     // Wait until join button is disabled or disappears
     await this.page.waitForFunction(
-      (selector) => {
-        const joinButton = document.querySelector(selector);
-        return !joinButton || joinButton.hasAttribute("disabled");
-      },
-      {},
-      '[data-tid="prejoin-join-button"]'
+        (selector) => {
+          const joinButton = document.querySelector(selector);
+          return !joinButton || joinButton.hasAttribute("disabled");
+        },
+        {},
+        '[data-tid="prejoin-join-button"]'
     );
 
     // Check if we're in a waiting room by checking if the join button exists and is disabled
-    const joinButton = await this.page.$('[data-tid="prejoin-join-button"]');
-    const isWaitingRoom =
-      joinButton &&
-      (await joinButton.evaluate((button) => button.hasAttribute("disabled")));
+    // const joinButton = await this.page.$('[data-tid="prejoin-join-button"]');
+    // const isWaitingRoom =
+    //   joinButton &&
+    //   (await joinButton.evaluate((button) => button.hasAttribute("disabled")));
+    const isWaitingRoom = true;
 
     let timeout = 30000; // if not in the waiting room, wait 30 seconds to join the meeting
     if (isWaitingRoom) {
       console.log(
-        `Joined waiting room, will wait for ${this.settings.automaticLeave.waitingRoomTimeout > 60 * 1000
-          ? `${this.settings.automaticLeave.waitingRoomTimeout / 60 / 1000
-          } minute(s)`
-          : `${this.settings.automaticLeave.waitingRoomTimeout / 1000
-          } second(s)`
-        }`
+          `Joined waiting room, will wait for ${this.settings.automaticLeave.waitingRoomTimeout > 60 * 1000
+              ? `${this.settings.automaticLeave.waitingRoomTimeout / 60 / 1000
+              } minute(s)`
+              : `${this.settings.automaticLeave.waitingRoomTimeout / 1000
+              } second(s)`
+          }`
       );
 
       // if in the waiting room, wait for the waiting room timeout
@@ -146,12 +153,12 @@ export class TeamsBot extends Bot {
     }
 
     // wait for the leave button to appear (meaning we've joined the meeting)
-    console.log('Waiting for the ability to leave the meeting (when I\'m in the meeting...)', timeout, 'ms')
     try {
       await this.page.waitForSelector(leaveButtonSelector, {
         timeout: timeout,
       });
     } catch (error) {
+      this.canceled = true;
       // Distinct error from regular timeout
       throw new WaitingRoomTimeoutError();
     }
@@ -173,8 +180,8 @@ export class TeamsBot extends Bot {
 
     // Get the stream
     this.stream = await getStream(
-      this.page as any, //puppeteer type issue
-      { audio: true, video: true },
+        this.page as any, //puppeteer type issue
+        {audio: true, video: true},
     );
 
 
@@ -193,7 +200,6 @@ export class TeamsBot extends Bot {
       this.stream.destroy();
     }
   }
-
 
 
   async run() {
@@ -223,26 +229,61 @@ export class TeamsBot extends Bot {
           }
 
           const currentElements = Array.from(
-            participantsList.querySelectorAll(
-              '[data-tid^="participantsInCall-"]'
-            )
+              participantsList.querySelectorAll(
+                  '[data-tid^="attendeesInMeeting-"]'
+              )
           );
 
           return currentElements
-            .map((el) => {
-              const nameSpan = el.querySelector("span[title]");
-              return (
-                nameSpan?.getAttribute("title") ||
-                nameSpan?.textContent?.trim() ||
-                ""
-              );
-            })
-            .filter((name) => name);
+              .map((el) => {
+                const nameSpan = el.querySelector("span[title]");
+                return (
+                    nameSpan?.getAttribute("title") ||
+                    nameSpan?.textContent?.trim() ||
+                    ""
+                );
+              })
+              .filter((name) => name);
         });
 
         this.participants = currentParticipants;
+        if (this.participants.length > 1) {
+          this.timeAloneStarted = Infinity;
+        } else if (this.timeAloneStarted === Infinity) {
+          this.timeAloneStarted = Date.now();
+        }
+
+        this.aloneCheck();
       } catch (error) {
         console.log("Error getting participants:", error);
+      }
+    };
+
+    const checkActivity = async () => {
+      try {
+        const isActive = await this.page.evaluate(() => {
+          return !!document.querySelector(`div.vdi-frame-occlusion`);
+        });
+        if (isActive) {
+          console.log('Activity Detected!')
+          this.lastActivity = Date.now();
+          return;
+        }
+        // console.log(`NO ACTIVITY. Waiting for activity timeout time to have allocated (${(Date.now() - this.lastActivity) / 1000} / ${this.settings.automaticLeave.inactivityTimeout / 1000}s) ...`);
+        // Check if there has been no activity, case for when only bots stay in the meeting
+        if (
+            this.participants.length > 1 &&
+            this.lastActivity &&
+            Date.now() - this.lastActivity > this.settings.automaticLeave.inactivityTimeout
+        ) {
+          console.log(`No activity detected during ${this.settings.automaticLeave.inactivityTimeout / 1000}s, leaving`);
+          await this.endLife();
+          return;
+        }
+
+
+      } catch (error) {
+        console.log("Error checking Activity", error);
       }
     };
 
@@ -251,22 +292,35 @@ export class TeamsBot extends Bot {
 
     // Then check for participants every heartbeatInterval milliseconds
     this.participantsIntervalId = setInterval(
-      updateParticipants,
-      this.settings.heartbeatInterval
+        updateParticipants,
+        this.settings.heartbeatInterval
     );
+
+    // Then check for activity every 500 milliseconds
+    this.activityIntervalId = setInterval(
+        checkActivity,
+        500
+    );
+
+    // Setting last activity time stamp to leave if nobody started talking
+    this.lastActivity = Date.now();
 
     await this.startRecording();
 
-    // Then wait for meeting to end by watching for the "Leave" button to disappear
-    await this.page.waitForFunction(
-      (selector) => !document.querySelector(selector),
-      { timeout: 0 }, // wait indefinitely
-      leaveButtonSelector
-    );
+    try {
+      // Then wait for meeting to end by watching for the "Leave" button to disappear
+      await this.page.waitForFunction(
+          (selector) => !document.querySelector(selector),
+          {timeout: 0}, // wait indefinitely
+          leaveButtonSelector
+      );
+    } catch (e) {
+      // Checking if the meeting was ended by other event
+      if (!this.ended) {
+        throw e;
+      }
+    }
     console.log("Meeting ended");
-
-    // Clear the participants checking interval
-    clearInterval(this.participantsIntervalId);
 
     this.endLife();
   }
@@ -277,11 +331,30 @@ export class TeamsBot extends Bot {
    */
   async endLife() {
 
+    this.ended = true;
+    // Trying to leave the meeting
+    try {
+      await this.page.locator(leaveButtonSelector).click();
+    } catch (error) {
+     // Doing nothing
+    }
     // Close File if it exists
     if (this.file) {
       this.file.close();
       this.file = null as any;
     }
+
+    // Clear any intervals or timeouts to prevent open handles
+    if (this.participantsIntervalId) {
+      clearInterval(this.participantsIntervalId);
+    }
+
+    if (this.activityIntervalId) {
+      clearInterval(this.activityIntervalId);
+    }
+
+    // Wait to all loop checked are finished
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Close Browser
     if (this.browser) {
@@ -291,12 +364,22 @@ export class TeamsBot extends Bot {
       (await wss).close();
     }
 
-    // Clear any intervals or timeouts to prevent open handles
-    if (this.participantsIntervalId) {
-      clearInterval(this.participantsIntervalId);
-    }
 
     // Delete recording
     this.stopRecording();
+  }
+
+  aloneCheck() {
+    const leaveMs = this.settings?.automaticLeave?.everyoneLeftTimeout ?? 30000; // Default to 30 seconds if not set
+    const msDiff = Date.now() - this.timeAloneStarted;
+    if (this.timeAloneStarted !== Infinity) {
+      console.log(`Only me left in the meeting. Waiting for timeout time to have allocated (${msDiff / 1000} / ${leaveMs / 1000}s) ...`);
+    }
+
+
+    if (msDiff > leaveMs) {
+      console.log('Only one participant remaining for more than alocated time, leaving the meeting.');
+      this.endLife();
+    }
   }
 }
