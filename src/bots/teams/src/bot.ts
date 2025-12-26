@@ -7,6 +7,13 @@ import path from "path";
 import {Transform} from "stream";
 
 const leaveButtonSelector = 'button#hangup-button';
+const rejoinButtonSelector = '[data-tid="calling-retry-rejoinbutton"]';
+const continueButtonSelector = '[data-focus-target="gum-continue"]';
+const joinWebButtonSelector = '[data-tid="joinOnWeb"]';
+// TODO: pass this in meeting info
+const SCREEN_WIDTH = 1920;
+const SCREEN_HEIGHT = 1080;
+
 
 export class TeamsBot extends Bot {
   recordingPath: string;
@@ -51,7 +58,7 @@ export class TeamsBot extends Bot {
     return this.contentType;
   }
 
-  async screenshot(fName: string = "screenshot.png") {
+  async screenshot(fName: string = 'screenshot.png') {
     try {
       if (!this.page) throw new Error("Page not initialized");
       if (!this.browser) throw new Error("Browser not initialized");
@@ -72,13 +79,38 @@ export class TeamsBot extends Bot {
 
 
   async launchBrowser() {
-
+    let executablePath = puppeteer.executablePath(),
+        headless = "new";
+    if (process.env.NODE_ENV == "development") {
+      executablePath = '/opt/homebrew/bin/chromium';
+      headless = false;
+    }
     // Launch the browser and open a new blank page
     this.browser = await launch({
-      executablePath: puppeteer.executablePath(),
-      headless: "new",
+      executablePath,
+      headless,
       // args: ["--use-fake-ui-for-media-stream"],
-      args: ["--no-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+
+        // K8s/Docker stability (especially with small /dev/shm):
+        "--disable-dev-shm-usage",
+
+        // Make Teams happy about media devices (even if pod has none):
+        "--use-fake-device-for-media-stream",
+        // "--use-fake-ui-for-media-stream",
+        "--use-file-for-fake-video-capture=/dev/null",
+        "--use-file-for-fake-audio-capture=/dev/null",
+
+        // Prevent Chrome from deprioritizing the meeting tab:
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+
+        // Helps in some container audio-stack setups:
+        // "--disable-features=AudioServiceOutOfProcess",
+      ],
       protocolTimeout: 0,
     }) as unknown as Browser;
 
@@ -106,29 +138,7 @@ export class TeamsBot extends Bot {
     console.log("Navigating to URL:", urlObj.href);
     await this.page.goto(urlObj.href);
 
-    // Fill in the display name
-    await this.page
-        .locator(`[data-tid="prejoin-display-name-input"]`)
-        .fill(this.settings.botDisplayName ?? "Meeting Bot");
-    console.log('Entered Display Name');
-
-    // Mute microphone before joining
-    await this.page.locator(`[data-tid="toggle-mute"]`).click();
-    console.log('Muted Microphone');
-
-    // Join the meeting
-    await this.page.locator(`[data-tid="prejoin-join-button"]`).click();
-    console.log('Found & Clicked the Join Button');
-
-    // Wait until join button is disabled or disappears
-    await this.page.waitForFunction(
-        (selector) => {
-          const joinButton = document.querySelector(selector);
-          return !joinButton || joinButton.hasAttribute("disabled");
-        },
-        {},
-        '[data-tid="prejoin-join-button"]'
-    );
+    await this.joinProcedure();
 
     // Check if we're in a waiting room by checking if the join button exists and is disabled
     // const joinButton = await this.page.$('[data-tid="prejoin-join-button"]');
@@ -174,6 +184,14 @@ export class TeamsBot extends Bot {
     return false;
   }
 
+  /**
+   * Starts the recording of the call using ffmpeg.
+   *
+   * This function initializes an ffmpeg process to capture the screen and audio of the meeting.
+   * It ensures that only one recording process is active at a time and logs the status of the recording.
+   *
+   * @returns {void}
+   */
   async startRecording() {
 
     if (!this.page) throw new Error("Page not initialized");
@@ -269,7 +287,7 @@ export class TeamsBot extends Bot {
           this.lastActivity = Date.now();
           return;
         }
-        // console.log(`NO ACTIVITY. Waiting for activity timeout time to have allocated (${(Date.now() - this.lastActivity) / 1000} / ${this.settings.automaticLeave.inactivityTimeout / 1000}s) ...`);
+        console.log(`NO ACTIVITY. Waiting for activity timeout time to have allocated (${(Date.now() - this.lastActivity) / 1000} / ${this.settings.automaticLeave.inactivityTimeout / 1000}s) ...`);
         // Check if there has been no activity, case for when only bots stay in the meeting
         if (
             this.participants.length > 1 &&
@@ -277,7 +295,7 @@ export class TeamsBot extends Bot {
             Date.now() - this.lastActivity > this.settings.automaticLeave.inactivityTimeout
         ) {
           console.log(`No activity detected during ${this.settings.automaticLeave.inactivityTimeout / 1000}s, leaving`);
-          await this.endLife();
+         await this.leave();
           return;
         }
 
@@ -307,19 +325,7 @@ export class TeamsBot extends Bot {
 
     await this.startRecording();
 
-    try {
-      // Then wait for meeting to end by watching for the "Leave" button to disappear
-      await this.page.waitForFunction(
-          (selector) => !document.querySelector(selector),
-          {timeout: 0}, // wait indefinitely
-          leaveButtonSelector
-      );
-    } catch (e) {
-      // Checking if the meeting was ended by other event
-      if (!this.ended) {
-        throw e;
-      }
-    }
+    await this.checkForMeetingEnded();
     console.log("Meeting ended");
 
     this.endLife();
@@ -331,12 +337,16 @@ export class TeamsBot extends Bot {
    */
   async endLife() {
 
+    if (this.ended) {
+      // Avoiding double call
+      return;
+    }
     this.ended = true;
     // Trying to leave the meeting
     try {
       await this.page.locator(leaveButtonSelector).click();
     } catch (error) {
-     // Doing nothing
+      // Doing nothing
     }
     // Close File if it exists
     if (this.file) {
@@ -353,23 +363,19 @@ export class TeamsBot extends Bot {
       clearInterval(this.activityIntervalId);
     }
 
-    // Wait to all loop checked are finished
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Ensure Recording is done
+    console.log('Stopping Recording ...')
+    await this.stopRecording();
+    console.log('Done.')
 
-    // Close Browser
+    // Close my browser
     if (this.browser) {
       await this.browser.close();
-
-      // Close the websocket server
-      (await wss).close();
+      console.log("Closed Browser.");
     }
-
-
-    // Delete recording
-    this.stopRecording();
   }
 
-  aloneCheck() {
+  async aloneCheck() {
     const leaveMs = this.settings?.automaticLeave?.everyoneLeftTimeout ?? 30000; // Default to 30 seconds if not set
     const msDiff = Date.now() - this.timeAloneStarted;
     if (this.timeAloneStarted !== Infinity) {
@@ -379,7 +385,137 @@ export class TeamsBot extends Bot {
 
     if (msDiff > leaveMs) {
       console.log('Only one participant remaining for more than alocated time, leaving the meeting.');
-      this.endLife();
+      await this.leave()
+    }
+  }
+
+  async checkForMeetingEnded() {
+    const check = async (resolve: () => void): Promise<void> => {
+      try {
+        await this.page.waitForSelector(
+            leaveButtonSelector,
+            {timeout: 2000},
+        );
+        await check(resolve);
+      } catch (e) {
+        resolve();
+      }
+    };
+
+    return new Promise<void>((resolve) => {
+      void check(resolve);
+    });
+  }
+
+  async checkForRejoining() {
+    try {
+      await this.page.waitForSelector(
+          rejoinButtonSelector,
+          {timeout: 2000},
+      );
+      await this.page.locator(rejoinButtonSelector).click();
+      // Wait to form to appear again
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      await this.joinProcedure();
+    } catch (e) {
+      this.checkForRejoining();
+    }
+  }
+
+  async joinProcedure() {
+    const displayName = this.settings.botDisplayName ?? "Meeting Bot";
+    const displayNameSelector = '[data-tid="prejoin-display-name-input"]';
+    const muteButtonSelector = '[data-tid="toggle-mute"]';
+
+    // Fill in the display name (Teams can re-render the input; `.fill()` can intermittently stop early)
+    await this.page.waitForSelector(displayNameSelector, {timeout: 15000});
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        const input = await this.page.$(displayNameSelector);
+        if (!input) {
+          throw new Error("Display name input not found");
+        }
+
+        // Focus + clear reliably
+        await input.click({clickCount: 3});
+        const selectAllModifier = process.platform === "darwin" ? "Meta" : "Control";
+        await this.page.keyboard.down(selectAllModifier);
+        await this.page.keyboard.press("A");
+        await this.page.keyboard.up(selectAllModifier);
+        await this.page.keyboard.press("Backspace");
+
+        // Type more slowly to avoid Teams dropping keystrokes
+        await input.type(displayName, {delay: 35});
+
+        // Verify value (Teams sometimes only keeps the first 1-3 chars)
+        const actual = await this.page.$eval(displayNameSelector, (el) => {
+          const inputEl = el as HTMLInputElement;
+          return typeof inputEl.value === "string" ? inputEl.value : "";
+        });
+        if (actual === displayName) {
+          console.log("Entered Display Name");
+          break;
+        }
+
+        // Fallback: set via native value setter + dispatch events (better for controlled inputs)
+        await this.page.evaluate(
+            ({ selector, value }: { selector: string; value: string }) => {
+              const el = document.querySelector(selector) as HTMLInputElement | null;
+              if (!el) return;
+              el.focus();
+              const setter = Object.getOwnPropertyDescriptor(
+                  window.HTMLInputElement.prototype,
+                  "value",
+              )?.set;
+              setter?.call(el, value);
+              el.dispatchEvent(new Event("input", {bubbles: true}));
+              el.dispatchEvent(new Event("change", {bubbles: true}));
+            },
+            { selector: displayNameSelector, value: displayName },
+        );
+
+        const actualAfterFallback = await this.page.$eval(displayNameSelector, (el) => {
+          const inputEl = el as HTMLInputElement;
+          return typeof inputEl.value === "string" ? inputEl.value : "";
+        });
+        if (actualAfterFallback === displayName) {
+          console.log("Entered Display Name");
+          break;
+        }
+      } catch (e) {
+        // retry
+      }
+
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      } else {
+        console.log("Display name fill did not fully stick; continuing anyway.");
+      }
+    }
+
+    try {
+      // Mute microphone before joining
+      await this.page.waitForSelector(muteButtonSelector, {timeout: 500});
+      await this.page.locator(muteButtonSelector).click();
+      console.log('Muted Microphone');
+    } catch (e) {
+      console.log('Mute button not found');
+    }
+
+
+    // Join the meeting
+    await this.page.locator(`[data-tid="prejoin-join-button"]`).click();
+    console.log('Found & Clicked the Join Button');
+
+    this.checkForRejoining();
+  }
+
+  async leave(){
+    try {
+      await this.page.locator(leaveButtonSelector).click();
+    } catch (error) {
+      await this.endLife();
     }
   }
 }
